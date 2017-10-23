@@ -2,6 +2,16 @@ import numpy as np
 import rand
 #from Queue import Queue
 
+class bcolors:
+	HEADER = '\033[95m'
+	OKBLUE = '\033[94m'
+	OKGREEN = '\033[92m'
+	WARNING = '\033[93m'
+	FAIL = '\033[91m'
+	ENDC = '\033[0m'
+	BOLD = '\033[1m'
+	UNDERLINE = '\033[4m'
+
 class Schedule(object):
 	"""docstring for Schedule"""
 	def __init__(self, time, func, next=None):
@@ -27,6 +37,7 @@ class Simulation(object):
 		self.Ts = Ts
 		self.max_time = max_time
 		self.rate = 0
+		self.waiting_times = []
 
 		self.gen_serivice_time = rand.randVar(1/Ts)
 		self.gen_arrival_time = rand.randVar(lmb)
@@ -107,14 +118,15 @@ class Simulation(object):
 
 
 
-			self.queue.append({"Ts": k})
+			self.queue.append({"Ts": k, "arrival": self.curr_time})
 			#the service time -- Ts -- is also the death event
 			self.S_pointer = self.add_item(self.S_pointer, time=k, 
 				func=self.death)
 			#####if queue is empty just add to curr_time and continue
 		else:	
 			info = {"Ts" : 0} #ts is to be determined
-			self.queue.append({"Ts": 0})
+			self.queue.append({"Ts": 0, "arrival": self.curr_time})
+
 
 		
 
@@ -136,6 +148,7 @@ class Simulation(object):
 
 		req = self.queue.pop(0) #remove first item in queue
 
+		self.waiting_times.append( float(self.curr_time - req["arrival"]) / 100.0)
 		#assign service time for the next, essentially assigning the next death event
 
 		if not self.queue or isinstance(self.queue, int):
@@ -154,6 +167,7 @@ class Simulation(object):
 		else: #other items waiting in queue
 
 			k = self.curr_time + k_first
+
 			self.all_times.append(k_first)
 			self.queue[0]["Ts"] = k
 
@@ -167,20 +181,22 @@ class Simulation(object):
 		""" @Param:
 			@Return: void, prints current time,
 		""" 
-		print("\n------ Monitoring Report ------")
-		print("Utilization: " , self.rate * self.Ts)
+		print( bcolors.HEADER + "\n------ Monitoring Report ------" + bcolors.ENDC)
+		print(  "Utilization: " , self.rate * self.Ts)
 		
+		print("Tw: ", np.mean(self.waiting_times))
+
 		print("W: " , len(self.queue))
 		
-		print("Average service Time (Tq): ", np.mean(self.all_times))
+		print("Average service Time (Tq): ",np.mean(self.waiting_times) + self.Ts )
 
-		Tw = [i for i in self.queue]
-		print(Tw)
-		self.print_cal(self.S_pointer)
+		queue = [i for i in self.queue]
+		print("Status of Queue: ", queue)
+		#self.print_cal(self.S_pointer)
 		#print("Average service Time (Ts): ", np.mean(Tw))
 
-		print("Current Time: ", self.curr_time)
-		print("------ End Monitoring Report ------\n")
+		print("Current Time: ", str(self.curr_time) )
+		print( bcolors.HEADER + "------ End Monitoring Report ------\n"  + bcolors.ENDC)
 
 
 	def start_simulation(self):
@@ -223,4 +239,4 @@ if __name__ == '__main__':
 
 
 
-	obj = Simulation(100, 5, 0.15)
+	obj = Simulation(1000, 5, 0.15)
