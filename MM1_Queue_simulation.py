@@ -38,11 +38,20 @@ class Simulation(object):
 		self.max_time = max_time
 		self.rate = 0
 		self.waiting_times = []
+		self.service_times = []
+		self.IAT = []
 
-		self.gen_serivice_time = rand.randVar(1/Ts)
+		self.queue_is_empty = False
+		self.idleTime = 0 #used for calculating utilization
+
+		self.departures = 0
+
+		self.number_arrivals = 0.0
+
+		self.gen_serivice_time = rand.randVar(1 / Ts)
 		self.gen_arrival_time = rand.randVar(lmb)
 
-		self.start_simulation()
+		#self.start_simulation()
 		#self.Ts = Ts
 		
 
@@ -97,10 +106,8 @@ class Simulation(object):
 
 	def initializeState	(self):
 		#add one single birth event in the system
-		k = {}
-		k["time"] = 0
-		k["func"] =  self.birth
-		self.S_pointer = self.add_item(self.S_pointer, time=int(np.random.poisson(self.lmb)), func=self.birth)
+
+		self.S_pointer = self.add_item(self.S_pointer, time=int(self.gen_arrival_time.exp()), func=self.birth)
 		self.queue = []
 	
 
@@ -108,15 +115,16 @@ class Simulation(object):
 	def birth(self):
 		print("Birth event has been called: ")
 		#first add request in the queue and assign ts 
-		
+		self.queue_is_empty = True
+
+		self.number_arrivals += 1
 
 		if not self.queue: # If no requests waiting
 			print("Assigning Service time immediatly")
 			k =  int(self.gen_serivice_time.exp() * 100)
-			self.all_times.append(k)	
+
+			self.service_times.append(k/100.0)	
 			k += self.curr_time 
-
-
 
 			self.queue.append({"Ts": k, "arrival": self.curr_time})
 			#the service time -- Ts -- is also the death event
@@ -127,16 +135,11 @@ class Simulation(object):
 			info = {"Ts" : 0} #ts is to be determined
 			self.queue.append({"Ts": 0, "arrival": self.curr_time})
 
-
-		
-
-
-
 		# determine the next birth event
-		self.rate = int(np.random.poisson(self.lmb)) #rate of incoming requests
+		k = self.gen_arrival_time.exp() 
+		self.IAT.append(k)
+		k =  int(k * 100) + self.curr_time			
 
-		s = self.rate + self.curr_time #When the next will the request be entering the system
-		k =  int(self.gen_arrival_time.exp() * 100) + self.curr_time			
 		self.S_pointer = self.add_item(self.S_pointer, time= k, func=self.birth) # at time s there is a new 
 
 
@@ -144,7 +147,9 @@ class Simulation(object):
 		print("Death event has been called")
 
 		k_first = int(self.gen_serivice_time.exp() * 100)
+		self.service_times.append(k_first/100.0)
 
+		self.departures += 1
 
 		req = self.queue.pop(0) #remove first item in queue
 
@@ -153,22 +158,26 @@ class Simulation(object):
 
 		if not self.queue or isinstance(self.queue, int):
 			print("Empty queue")
+			self.queue_is_empty = True
+
 			#self.print_cal(self.S_pointer)
 			#print("INFOOOOO ::: ", self.S_pointer.time)
-
+			"""
 			if  self.S_pointer.next == None : # calander is empty and other items
-				print("THIS DOES GET CALELLLED")
 				k =  int(np.random.exponential(1/self.Ts)) + self.curr_time			
+				
 				self.S_pointer = self.add_item(self.S_pointer, time= k, func=self.birth) # at time s there is a new
-
+			"""
 			
 
 			#if the queue is empty after removing the only one just return	
 		else: #other items waiting in queue
 
+			self.queue_is_empty = False
+
 			k = self.curr_time + k_first
 
-			self.all_times.append(k_first)
+			#self.all_times.append(k_first)
 			self.queue[0]["Ts"] = k
 
 			self.S_pointer = self.add_item(self.S_pointer, time= k, func= self.death)
@@ -181,14 +190,32 @@ class Simulation(object):
 		""" @Param:
 			@Return: void, prints current time,
 		""" 
+		#lambda = number of total arrivals / currtime
+		#number being serviced / departures
+
 		print( bcolors.HEADER + "\n------ Monitoring Report ------" + bcolors.ENDC)
-		print(  "Utilization: " , self.rate * self.Ts)
-		
+
+		print("Idle time: ", self.idleTime)
+
+		Ts = np.mean(self.service_times)
+
+		print("Ts :",  np.mean(self.service_times) )
+		q = len(self.queue) + 1
+		print("Q: ", q )
+
+		#print("Utilization: " , 1 - (float(self.idleTime) / float(self.curr_time`) ))
+		IAT = np.mean(self.IAT)
+
+		print("Mean IAT: ", IAT)
+
 		print("Tw: ", np.mean(self.waiting_times))
 
 		print("W: " , len(self.queue))
 		
-		print("Average service Time (Tq): ",np.mean(self.waiting_times) + self.Ts )
+		Tq = np.mean(self.waiting_times) + Ts
+		print("Average service Time (Tq): ", Tq)
+
+		print("Utilization: " ,  Ts * self.lmb )
 
 		queue = [i for i in self.queue]
 		print("Status of Queue: ", queue)
@@ -198,22 +225,23 @@ class Simulation(object):
 		print("Current Time: ", str(self.curr_time) )
 		print( bcolors.HEADER + "------ End Monitoring Report ------\n"  + bcolors.ENDC)
 
-
 	def start_simulation(self):
 
 		self.initializeState() 
 		self.curr_time = 0
 
-		monitor_time = int(np.random.exponential(1/self.Ts))
+		monitor_time = int(np.random.exponential(1 / self.Ts))
 		
 		#print(self.S_pointer.time)
-
+		
 		while self.curr_time < (self.max_time * 2):
 			#self.print_cal(self.S_pointer)
 
+			if(self.queue_is_empty):
+				self.idleTime += 1
+
 			if(self.S_pointer.time == self.curr_time):
-				#self.print_cal(self.S_pointer)
-		
+
 				event = self.S_pointer.func
 				self.curr_time += 1
 				#call the appropriate event
@@ -224,15 +252,14 @@ class Simulation(object):
 			else:
 				self.curr_time += 1			
 			#print(self.curr_time)
-			if monitor_time != 0 and self.curr_time % 10 == 0 and self.curr_time > self.max_time:
+
+			if monitor_time == 0:
+				monitor_time = int(rand.randVar(1.0/ 30.0).exp())
+			elif self.curr_time % monitor_time == 0: #and self.curr_time > self.max_time:
+
 				self.monitoring()
-				monitor_time = int(np.random.exponential(30))
-				
+				monitor_time = int(rand.randVar(1.0/ 30.0).exp())
 
-
-
-			#self.Schedule
-	
 
 if __name__ == '__main__':
 	print("lets start!!")
@@ -240,3 +267,8 @@ if __name__ == '__main__':
 
 
 	obj = Simulation(1000, 5, 0.15)
+
+	#obj = Simulation(1000, 6, 0.15)
+
+	#obj = Simulation(1000, 6, 0.20)
+	obj.start_simulation()
